@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task 5 — Firebase Logging, Automation &amp; Data Export · ProtoSem IoT · Viswes</title>
+<meta name="description" content="Timestamped logging, LDR-based automatic lighting, a history chart and CSV export.">
+<link rel="stylesheet" href="assets/style.css?v=3">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="index.html">ProtoSem IoT <span>· Viswes Vijayaragavan Sivakumar · 24BCS321</span></a>
+  <nav><a href="index.html">Overview</a><a href="task-1.html">Task 1</a><a href="task-2.html">Task 2</a><a href="task-3.html">Task 3</a><a href="task-4.html">Task 4</a><a href="task-5.html" class="on">Task 5</a><a href="https://github.com/TringyTrongy/protosem-iot">Repository</a></nav>
+</div></header>
+<main class="wrap">
+<div class="hero"><h1>Task 5 — Firebase Logging, Automation &amp; Data Export</h1><p class="lede">Timestamped logging, LDR-based automatic lighting, a history chart and CSV export.</p></div>
+<div class="links"><a class="btn" href="https://bulb-v2.web.app/v2.html">Open dashboard v2</a><a class="btn" href="https://github.com/TringyTrongy/protosem-iot/tree/main/task5-logging-automation">Code for this task</a></div><div class="layout"><nav class="toc"><b>On this page</b><a href="#s1">1. Overview</a><a href="#s2">2. Concepts</a><a href="#s3">3. System Design</a><a href="#s4">4. Hardware &amp; Software</a><a href="#s5">5. Wiring / Setup</a><a href="#s6">6. Implementation</a><a href="#s7">7. Configuration</a><a href="#s8">8. Evidence</a><a href="#s9">9. Challenges &amp; Fixes</a><a href="#s10">10. Reflection</a><a href="#s11">11. Repository Link</a></nav><div class="content"><section id="s1"><h2><span class="num">1</span>Overview</h2><p><b>Objective.</b> Turn the Task 4 rig into a complete home-automation system: every reading is logged with a timestamp, the bulb can run in <b>manual</b> or <b>automatic</b> mode (switched by the LDR against a threshold set from the dashboard), the history is shown as a chart and a table, and the full log can be downloaded as a CSV file.</p>
+<p><b>Dashboard with history:</b> <a href="https://bulb-v2.web.app/v2.html">https://bulb-v2.web.app/v2.html</a></p></section><section id="s2"><h2><span class="num">2</span>Concepts</h2><h3>Data logging</h3><p>Saving every reading with the time it was taken, so you can see trends instead of only the current value.</p>
+<h3>Manual vs automatic control</h3><p>In manual mode a person decides; in automatic mode the device decides from a rule. A <code>mode</code> value in the database lets the dashboard switch between them without reflashing the ESP32.</p>
+<h3>Threshold and hysteresis</h3><p>The bulb turns on when the light level drops below a set value. The LDR reading is noisy, so a single threshold would make the relay chatter when the light sits right at the edge. The firmware uses a ±100 band: on below <i>threshold − 100</i>, off above <i>threshold + 100</i>, unchanged in between.</p>
+<h3>CSV</h3><p>Comma-separated values: a plain-text table that opens in Excel or Google Sheets.</p></section><section id="s3"><h2><span class="num">3</span>System Design</h2><svg class="diagram" viewBox="0 0 850 265" role="img" aria-label="Firebase system architecture" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs><title>Firebase system architecture</title><rect x="10" y="30" width="170" height="110" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/><text x="95.0" y="79.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">ESP32</text><text x="95.0" y="96.0" text-anchor="middle" font-size="11.5" fill="#6b7280">DHT11 · LDR · relay</text><text x="95.0" y="110.0" text-anchor="middle" font-size="11.5" fill="#6b7280">Firebase ESP Client</text><rect x="300" y="10" width="240" height="150" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/><text x="420.0" y="79.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Firebase Realtime DB</text><text x="420.0" y="96.0" text-anchor="middle" font-size="11.5" fill="#6b7280">/sensors/current</text><text x="420.0" y="110.0" text-anchor="middle" font-size="11.5" fill="#6b7280">/bulb  (status, mode)</text><text x="420.0" y="124.0" text-anchor="middle" font-size="11.5" fill="#6b7280">/settings/ldrThreshold</text><text x="420.0" y="138.0" text-anchor="middle" font-size="11.5" fill="#6b7280">/logs/&lt;pushId&gt;</text><rect x="660" y="30" width="180" height="110" rx="10" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/><text x="750.0" y="79.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Web dashboard</text><text x="750.0" y="96.0" text-anchor="middle" font-size="11.5" fill="#6b7280">bulb-v2.web.app</text><text x="750.0" y="110.0" text-anchor="middle" font-size="11.5" fill="#6b7280">(Firebase Hosting)</text><rect x="300" y="195" width="240" height="55" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/><text x="420.0" y="216.5" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Firebase Authentication</text><text x="420.0" y="233.5" text-anchor="middle" font-size="11.5" fill="#6b7280">Email/Password · rules: auth != null</text><line x1="180" y1="60" x2="300" y2="60" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="240.0" y="53.0" text-anchor="middle" font-size="11" fill="#6b7280">write readings + logs</text><line x1="300" y1="105" x2="180" y2="105" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="240.0" y="121.0" text-anchor="middle" font-size="11" fill="#6b7280">read bulb + threshold</text><line x1="540" y1="60" x2="660" y2="60" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="600.0" y="53.0" text-anchor="middle" font-size="11" fill="#6b7280">live listeners</text><line x1="660" y1="105" x2="540" y2="105" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="600.0" y="121.0" text-anchor="middle" font-size="11" fill="#6b7280">set mode / status</text><text x="600.0" y="134.0" text-anchor="middle" font-size="11" fill="#6b7280">/ threshold</text><line x1="95" y1="140" x2="300" y2="222" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)" stroke-dasharray="5 4"/><text x="197.5" y="174.0" text-anchor="middle" font-size="11" fill="#6b7280">sign in</text><line x1="750" y1="140" x2="540" y2="222" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)" stroke-dasharray="5 4"/><text x="645.0" y="174.0" text-anchor="middle" font-size="11" fill="#6b7280">sign in</text></svg><h3>Automatic lighting logic</h3><pre><code class="">every 1 s:
+  read /bulb (mode, status) and /settings/ldrThreshold
+  if mode == &quot;auto&quot;:
+      if ldr &lt; threshold - 100:  bulb = ON      (dark)
+      if ldr &gt; threshold + 100:  bulb = OFF     (bright)
+      write the decision to /bulb/status        (so the dashboard shows the real state)
+  else:
+      relay follows /bulb/status                (dashboard button)
+every 30 s:
+  push { timestamp, temperature, humidity, ldr, bulbState, mode } to /logs</code></pre></section><section id="s4"><h2><span class="num">4</span>Hardware &amp; Software</h2><div class="tablewrap"><table class=""><thead><tr><th>Hardware</th><th>Software / services</th></tr></thead><tbody><tr><td>Same rig as Task 4: ESP32, DHT11, LDR + 10 kΩ, relay, bulb</td><td>Task 4 firmware (logging and auto mode are built in)</td></tr><tr><td></td><td>Dashboard v2: Firebase JS SDK 10 + Chart.js 4 for the history chart</td></tr><tr><td></td><td>Firebase Realtime Database, Authentication, Hosting</td></tr></tbody></table></div></section><section id="s5"><h2><span class="num">5</span>Wiring / Setup</h2><p>Same as <a href="task-4.html#s5">Task 4</a>: DHT11 on GPIO4, LDR divider on GPIO34, relay on GPIO26.</p>
+<h3>LDR calibration</h3>
+<ol><li>With auto mode off, read the LDR value on the dashboard with the room lights on.</li>
+<li>Cover the LDR with a finger (or switch the room light off) and read it again.</li>
+<li>Set the threshold roughly halfway between the two from the dashboard; it is saved to <code>/settings/ldrThreshold</code> and the ESP32 picks it up within a second.</li></ol><div class="calib ev pending-text" data-what="LDR readings">Readings for my room: lights on <b data-fill>____</b>, LDR covered <b data-fill>____</b>, threshold used <b data-fill>____</b>.</div></section><section id="s6"><h2><span class="num">6</span>Implementation</h2><h3>Logging (ESP32)</h3><p><code>pushLog()</code> in the firmware pushes one row to <code>/logs</code> every 30 seconds. <code>pushJSON()</code> gives each row a unique, time-ordered key, and the timestamp is filled in by the Firebase server (<code>{".sv": "timestamp"}</code>), so it is correct even though the ESP32 has no clock.</p><pre><code class="cpp">void pushLog() {
+  FirebaseJson row;
+  row.set(&quot;timestamp/.sv&quot;, &quot;timestamp&quot;);   // milliseconds since 1970, set by the server
+  row.set(&quot;temperature&quot;, lastTemp);
+  row.set(&quot;humidity&quot;, lastHum);
+  row.set(&quot;ldr&quot;, lastLdr);
+  row.set(&quot;bulbState&quot;, bulbOn ? &quot;ON&quot; : &quot;OFF&quot;);
+  row.set(&quot;mode&quot;, mode);
+  Firebase.RTDB.pushJSON(&amp;fbdo, &quot;/logs&quot;, &amp;row);
+}</code></pre><h3>Log structure</h3><pre><code class="json">/logs
+  -Nx3aQ...  { &quot;timestamp&quot;: 1792089000000, &quot;temperature&quot;: 28.4, &quot;humidity&quot;: 61,
+               &quot;ldr&quot;: 1834, &quot;bulbState&quot;: &quot;OFF&quot;, &quot;mode&quot;: &quot;auto&quot; }
+  -Nx3aZ...  { ... one row every 30 s ... }</code></pre><p class="muted">Full firmware: <a href="https://github.com/TringyTrongy/protosem-iot/blob/main/task4-firebase-dashboard/firmware/bulb_v2_firebase/bulb_v2_firebase.ino">bulb_v2_firebase.ino</a> (<code>syncControl()</code> for auto mode, <code>pushLog()</code> for logging).</p><details class="codefile" open><summary><span class="fname">v2.html</span><a href="https://github.com/TringyTrongy/protosem-iot/blob/main/task5-logging-automation/dashboard/public/v2.html">view on GitHub</a></summary><p class="muted">Dashboard v2: everything from Task 4 plus a live/offline indicator, a history chart, a table of recent entries and the CSV download.</p><pre><code class="html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+&lt;title&gt;Bulb-V2 Dashboard&lt;/title&gt;
+&lt;script src=&quot;https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;style&gt;
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262b35; --fg:#e8eaf0; --dim:#9aa3b2; --on:#f5b301; --ok:#22c55e; --bad:#ef4444; --accent:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:980px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--dim); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--bad); }
+  .dot.live { background:var(--ok); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .label { color:var(--dim); font-size:13px; }
+  .big { font-size:30px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .unit { font-size:15px; color:var(--dim); font-weight:400; }
+  button, input { font:inherit; }
+  button { background:#232835; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 14px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#0b1220; font-weight:600; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input { background:#0c0e12; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .bulb { font-size:30px; font-weight:600; margin-top:4px; }
+  .bulb.on { color:var(--on); }
+  .section { margin-top:22px; }
+  .section h2 { font-size:16px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; }
+  .tablewrap { overflow-x:auto; }
+  #authDiv { max-width:360px; margin:12vh auto 0; }
+  #authDiv input { width:100%; margin-top:8px; }
+  #authDiv button { width:100%; margin-top:12px; }
+  .err { color:var(--bad); font-size:13px; min-height:18px; margin-top:8px; }
+  .muted { color:var(--dim); font-size:13px; }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;div id=&quot;authDiv&quot; class=&quot;wrap&quot;&gt;
+  &lt;div class=&quot;card&quot;&gt;
+    &lt;h1&gt;Bulb-V2&lt;/h1&gt;
+    &lt;p class=&quot;muted&quot;&gt;Sign in to monitor and control the bulb.&lt;/p&gt;
+    &lt;input id=&quot;email&quot; type=&quot;email&quot; placeholder=&quot;Email&quot; autocomplete=&quot;username&quot;&gt;
+    &lt;input id=&quot;pass&quot; type=&quot;password&quot; placeholder=&quot;Password&quot; autocomplete=&quot;current-password&quot;&gt;
+    &lt;button class=&quot;primary&quot; onclick=&quot;login()&quot;&gt;Log in&lt;/button&gt;
+    &lt;div id=&quot;authErr&quot; class=&quot;err&quot;&gt;&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div id=&quot;dash&quot; class=&quot;wrap&quot; style=&quot;display:none&quot;&gt;
+  &lt;header&gt;
+    &lt;div&gt;
+      &lt;h1&gt;Bulb-V2 Dashboard&lt;/h1&gt;
+      &lt;span class=&quot;pill&quot;&gt;&lt;span id=&quot;liveDot&quot; class=&quot;dot&quot;&gt;&lt;/span&gt;&lt;span id=&quot;liveText&quot;&gt;Waiting for the ESP32…&lt;/span&gt;&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;button onclick=&quot;auth.signOut()&quot;&gt;Log out&lt;/button&gt;
+  &lt;/header&gt;
+
+  &lt;div class=&quot;grid&quot;&gt;
+    &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;label&quot;&gt;Temperature&lt;/div&gt;&lt;div class=&quot;big&quot;&gt;&lt;span id=&quot;t&quot;&gt;–&lt;/span&gt; &lt;span class=&quot;unit&quot;&gt;°C&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;label&quot;&gt;Humidity&lt;/div&gt;&lt;div class=&quot;big&quot;&gt;&lt;span id=&quot;h&quot;&gt;–&lt;/span&gt; &lt;span class=&quot;unit&quot;&gt;%&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;label&quot;&gt;Light level (LDR, 0–4095)&lt;/div&gt;&lt;div class=&quot;big&quot;&gt;&lt;span id=&quot;l&quot;&gt;–&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;card&quot;&gt;
+      &lt;div class=&quot;label&quot;&gt;Bulb&lt;/div&gt;
+      &lt;div id=&quot;b&quot; class=&quot;bulb&quot;&gt;–&lt;/div&gt;
+      &lt;div class=&quot;muted&quot;&gt;Mode: &lt;b id=&quot;m&quot;&gt;–&lt;/b&gt;&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;grid section&quot;&gt;
+    &lt;div class=&quot;card&quot;&gt;
+      &lt;div class=&quot;label&quot;&gt;Control&lt;/div&gt;
+      &lt;div class=&quot;row&quot;&gt;
+        &lt;button onclick=&quot;toggleMode()&quot;&gt;Switch to &lt;span id=&quot;otherMode&quot;&gt;auto&lt;/span&gt;&lt;/button&gt;
+        &lt;button id=&quot;bulbBtn&quot; onclick=&quot;toggleBulb()&quot;&gt;Toggle bulb&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;p class=&quot;muted&quot; id=&quot;modeHint&quot;&gt;In manual mode the button switches the bulb. In auto mode the ESP32 decides from the LDR.&lt;/p&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;card&quot;&gt;
+      &lt;div class=&quot;label&quot;&gt;Auto mode threshold&lt;/div&gt;
+      &lt;div class=&quot;row&quot;&gt;
+        &lt;input id=&quot;th&quot; type=&quot;number&quot; min=&quot;0&quot; max=&quot;4095&quot; style=&quot;width:120px&quot;&gt;
+        &lt;button onclick=&quot;setTh(th.value)&quot;&gt;Save&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;p class=&quot;muted&quot;&gt;Bulb turns on when the LDR reading drops below this (with ±100 hysteresis).&lt;/p&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;section card&quot;&gt;
+    &lt;h2&gt;History &lt;span class=&quot;muted&quot;&gt;(last 50 log entries)&lt;/span&gt;&lt;/h2&gt;
+    &lt;canvas id=&quot;histChart&quot; height=&quot;110&quot;&gt;&lt;/canvas&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;section card&quot;&gt;
+    &lt;div class=&quot;row&quot; style=&quot;justify-content:space-between;margin-top:0&quot;&gt;
+      &lt;h2 style=&quot;margin:0&quot;&gt;Recent log entries&lt;/h2&gt;
+      &lt;button onclick=&quot;exportCSV()&quot;&gt;Download all logs (CSV)&lt;/button&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;tablewrap&quot;&gt;
+      &lt;table&gt;
+        &lt;thead&gt;&lt;tr&gt;&lt;th&gt;Time&lt;/th&gt;&lt;th&gt;Temp (°C)&lt;/th&gt;&lt;th&gt;Humidity (%)&lt;/th&gt;&lt;th&gt;LDR&lt;/th&gt;&lt;th&gt;Bulb&lt;/th&gt;&lt;th&gt;Mode&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+        &lt;tbody id=&quot;histBody&quot;&gt;&lt;tr&gt;&lt;td colspan=&quot;6&quot; class=&quot;muted&quot;&gt;No log entries yet. They appear every 30 s while the ESP32 is running.&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;
+      &lt;/table&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+  // Web config from Firebase console &gt; Project settings (this key is meant to be public;
+  // the database rules are what protect the data).
+  const firebaseConfig = {
+    apiKey: &quot;AIzaSyBMG_YE_Hc0sXN34GXI2USB7i3XucQmfPw&quot;,
+    authDomain: &quot;bulb-v2.firebaseapp.com&quot;,
+    databaseURL: &quot;https://bulb-v2-default-rtdb.asia-southeast1.firebasedatabase.app&quot;,
+    projectId: &quot;bulb-v2&quot;,
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  let cur = {};
+  let lastUpdate = 0;
+
+  function login() {
+    authErr.textContent = &#x27;&#x27;;
+    auth.signInWithEmailAndPassword(email.value.trim(), pass.value)
+      .catch(err =&gt; authErr.textContent = err.message);
+  }
+  pass.addEventListener(&#x27;keydown&#x27;, e =&gt; { if (e.key === &#x27;Enter&#x27;) login(); });
+
+  auth.onAuthStateChanged(user =&gt; {
+    authDiv.style.display = user ? &#x27;none&#x27; : &#x27;block&#x27;;
+    dash.style.display = user ? &#x27;block&#x27; : &#x27;none&#x27;;
+    if (!user) return;
+
+    db.ref(&#x27;sensors/current&#x27;).on(&#x27;value&#x27;, s =&gt; {
+      const v = s.val() || {};
+      t.textContent = v.temperature != null ? Number(v.temperature).toFixed(1) : &#x27;–&#x27;;
+      h.textContent = v.humidity != null ? Math.round(v.humidity) : &#x27;–&#x27;;
+      l.textContent = v.ldr ?? &#x27;–&#x27;;
+      lastUpdate = v.updatedAt || 0;
+      updateLive();
+    });
+    db.ref(&#x27;bulb&#x27;).on(&#x27;value&#x27;, s =&gt; {
+      cur = s.val() || {};
+      b.textContent = cur.status ? &#x27;ON&#x27; : &#x27;OFF&#x27;;
+      b.className = &#x27;bulb&#x27; + (cur.status ? &#x27; on&#x27; : &#x27;&#x27;);
+      m.textContent = cur.mode || &#x27;–&#x27;;
+      otherMode.textContent = cur.mode === &#x27;auto&#x27; ? &#x27;manual&#x27; : &#x27;auto&#x27;;
+      bulbBtn.disabled = cur.mode === &#x27;auto&#x27;;
+    });
+    db.ref(&#x27;settings/ldrThreshold&#x27;).on(&#x27;value&#x27;, s =&gt; {
+      if (document.activeElement !== th) th.value = s.val() ?? &#x27;&#x27;;
+    });
+    db.ref(&#x27;logs&#x27;).orderByChild(&#x27;timestamp&#x27;).limitToLast(50).on(&#x27;value&#x27;, s =&gt; {
+      const rows = [];
+      s.forEach(c =&gt; { rows.push(c.val()); });
+      drawHistory(rows);
+    });
+  });
+
+  // &quot;Live&quot; means the ESP32 wrote sensor data in the last 20 seconds.
+  function updateLive() {
+    const age = Date.now() - lastUpdate;
+    const live = lastUpdate &amp;&amp; age &lt; 20000;
+    liveDot.className = &#x27;dot&#x27; + (live ? &#x27; live&#x27; : &#x27;&#x27;);
+    liveText.textContent = !lastUpdate ? &#x27;Waiting for the ESP32…&#x27;
+      : live ? &#x27;ESP32 online · updated &#x27; + Math.round(age / 1000) + &#x27; s ago&#x27;
+      : &#x27;ESP32 offline · last update &#x27; + new Date(lastUpdate).toLocaleString();
+  }
+  setInterval(updateLive, 1000);
+
+  function toggleMode() {
+    db.ref(&#x27;bulb/mode&#x27;).set(cur.mode === &#x27;auto&#x27; ? &#x27;manual&#x27; : &#x27;auto&#x27;);
+  }
+  function toggleBulb() {
+    if (cur.mode !== &#x27;auto&#x27;) db.ref(&#x27;bulb/status&#x27;).set(!cur.status);
+  }
+  function setTh(v) {
+    const n = Number(v);
+    if (Number.isFinite(n)) db.ref(&#x27;settings/ldrThreshold&#x27;).set(Math.max(0, Math.min(4095, Math.round(n))));
+  }
+
+  let histChart = null;
+  function drawHistory(rows) {
+    const labels = rows.map(r =&gt; new Date(r.timestamp).toLocaleTimeString());
+    const data = {
+      labels,
+      datasets: [
+        { label: &#x27;Temp (°C)&#x27;, data: rows.map(r =&gt; r.temperature), yAxisID: &#x27;y&#x27;, tension: .3, borderColor: &#x27;#f97316&#x27;, backgroundColor: &#x27;#f97316&#x27;, pointRadius: 2 },
+        { label: &#x27;Humidity (%)&#x27;, data: rows.map(r =&gt; r.humidity), yAxisID: &#x27;y&#x27;, tension: .3, borderColor: &#x27;#60a5fa&#x27;, backgroundColor: &#x27;#60a5fa&#x27;, pointRadius: 2 },
+        { label: &#x27;LDR&#x27;, data: rows.map(r =&gt; r.ldr), yAxisID: &#x27;y1&#x27;, tension: .3, borderColor: &#x27;#f5b301&#x27;, backgroundColor: &#x27;#f5b301&#x27;, pointRadius: 2 }
+      ]
+    };
+    const grid = { color: &#x27;#262b35&#x27; }, ticks = { color: &#x27;#9aa3b2&#x27; };
+    if (histChart) { histChart.data = data; histChart.update(); }
+    else {
+      histChart = new Chart(histCanvas(), {
+        type: &#x27;line&#x27;, data,
+        options: {
+          animation: false, interaction: { mode: &#x27;index&#x27;, intersect: false },
+          plugins: { legend: { labels: { color: &#x27;#e8eaf0&#x27; } } },
+          scales: {
+            x: { grid, ticks },
+            y: { position: &#x27;left&#x27;, grid, ticks, title: { display: true, text: &#x27;°C / %&#x27;, color: &#x27;#9aa3b2&#x27; } },
+            y1: { position: &#x27;right&#x27;, grid: { drawOnChartArea: false }, ticks, title: { display: true, text: &#x27;LDR&#x27;, color: &#x27;#9aa3b2&#x27; } }
+          }
+        }
+      });
+    }
+    if (!rows.length) return;
+    histBody.innerHTML = rows.slice().reverse().slice(0, 20).map(r =&gt;
+      `&lt;tr&gt;&lt;td&gt;${new Date(r.timestamp).toLocaleString()}&lt;/td&gt;&lt;td&gt;${fmt(r.temperature, 1)}&lt;/td&gt;&lt;td&gt;${fmt(r.humidity, 0)}&lt;/td&gt;&lt;td&gt;${r.ldr ?? &#x27;&#x27;}&lt;/td&gt;&lt;td&gt;${r.bulbState ?? &#x27;&#x27;}&lt;/td&gt;&lt;td&gt;${r.mode ?? &#x27;&#x27;}&lt;/td&gt;&lt;/tr&gt;`
+    ).join(&#x27;&#x27;);
+  }
+  function histCanvas() { return document.getElementById(&#x27;histChart&#x27;); }
+  function fmt(v, d) { return v == null ? &#x27;&#x27; : Number(v).toFixed(d); }
+
+  function exportCSV() {
+    db.ref(&#x27;logs&#x27;).orderByChild(&#x27;timestamp&#x27;).once(&#x27;value&#x27;, snap =&gt; {
+      let csv = &#x27;Timestamp,Temp,Humidity,LDR,Bulb,Mode\n&#x27;;
+      snap.forEach(child =&gt; {
+        const v = child.val();
+        csv += `${new Date(v.timestamp).toISOString()},${v.temperature ?? &#x27;&#x27;},${v.humidity ?? &#x27;&#x27;},${v.ldr ?? &#x27;&#x27;},${v.bulbState ?? &#x27;&#x27;},${v.mode ?? &#x27;&#x27;}\n`;
+      });
+      const blob = new Blob([csv], { type: &#x27;text/csv&#x27; });
+      const a = document.createElement(&#x27;a&#x27;);
+      a.href = URL.createObjectURL(blob);
+      a.download = &#x27;bulb-v2-logs.csv&#x27;;
+      a.click();
+    });
+  }
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre></details>
+<h3>Key sections (dashboard v2)</h3>
+<ul>
+<li><b>History</b> — <code>db.ref('logs').orderByChild('timestamp').limitToLast(50)</code> keeps the last 50 rows live; <code>drawHistory()</code> plots temperature and humidity on one axis and the LDR on a second axis, and fills the table with the newest 20.</li>
+<li><b>CSV export</b> — <code>exportCSV()</code> reads all of <code>/logs</code> once, writes one line per row with an ISO timestamp, and downloads it as <code>bulb-v2-logs.csv</code>.</li>
+<li><b>Mode and threshold</b> — the mode button flips <code>/bulb/mode</code>; the bulb button is disabled in auto mode because the ESP32 is in charge.</li>
+<li><b>Online indicator</b> — compares <code>sensors/current/updatedAt</code> with the current time; older than 20 s means the ESP32 is offline.</li>
+</ul></section><section id="s7"><h2><span class="num">7</span>Configuration</h2><ol><li>Flashed the Task 4 firmware (logging and auto mode included).</li><li>Added <code>v2.html</code> to the Firebase Hosting <code>public</code> folder and ran <code>firebase deploy</code>.</li><li>Set the LDR threshold from the dashboard after calibrating.</li><li>Left the rig running so <code>/logs</code> filled up, then tested both modes.</li></ol><figure class="shot"><img src="assets/img/firebase-rtdb-data.png" alt="Realtime Database before the ESP32 runs: empty (null). The screenshots below show it after logging."><figcaption>Realtime Database before the ESP32 runs: empty (null). The screenshots below show it after logging.</figcaption></figure></section><section id="s8"><h2><span class="num">8</span>Evidence</h2><div class="gallery"><figure class="shot ev" data-what="Firebase logs screenshot"><img src="evidence/task5-logs.png" alt="Firebase /logs with timestamped rows" onerror="this.closest('figure').classList.add('pending')"><figcaption>Firebase /logs with timestamped rows</figcaption></figure><figure class="shot ev" data-what="Dashboard v2 screenshot"><img src="evidence/task5-dashboard.png" alt="Dashboard v2: live values, history chart and recent entries" onerror="this.closest('figure').classList.add('pending')"><figcaption>Dashboard v2: live values, history chart and recent entries</figcaption></figure></div><div class="gallery"><figure class="shot ev" data-what="CSV screenshot"><img src="evidence/task5-csv.png" alt="The downloaded CSV opened in a spreadsheet" onerror="this.closest('figure').classList.add('pending')"><figcaption>The downloaded CSV opened in a spreadsheet</figcaption></figure><figure class="shot ev" data-what="Photo of the complete rig"><img src="evidence/task5-setup.jpg" alt="The complete prototype" onerror="this.closest('figure').classList.add('pending')"><figcaption>The complete prototype</figcaption></figure></div><figure class="shot ev" data-what="Demo video"><video controls preload="metadata" src="evidence/task5-demo.mp4" onerror="this.closest('figure').classList.add('pending')"></video><figcaption>Demo: manual control, switching to auto, covering the LDR to turn the bulb on, the chart updating, and downloading the CSV</figcaption></figure></section><section id="s9"><h2><span class="num">9</span>Challenges &amp; Fixes</h2><div class="fix"><p><b>Problem.</b> In auto mode the dashboard showed the wrong bulb state.</p><p><b>Why.</b> If the ESP32 switches the relay on its own, <code>/bulb/status</code> still holds the last manual value.</p><p><b>Fix.</b> In auto mode the ESP32 writes its decision back to <code>/bulb/status</code>, so the dashboard always shows what the bulb is really doing.</p></div><div class="fix"><p><b>Problem.</b> The bulb flickered when the light level was close to the threshold.</p><p><b>Why.</b> LDR readings are noisy, so a single threshold flips back and forth.</p><p><b>Fix.</b> Added ±100 hysteresis around the threshold.</p></div><div class="fix"><p><b>Problem.</b> Log timestamps need a clock the ESP32 doesn't have.</p><p><b>Why.</b> The ESP32 has no real-time clock, and <code>millis()</code> resets on every boot.</p><p><b>Fix.</b> Used the Firebase server timestamp (<code>.sv</code>), which also gives the dashboard and the CSV real dates.</p></div><h3>Limitations</h3><ul><li>The LDR sits near the bulb, so in auto mode the bulb's own light can push the reading back over the threshold. Hysteresis helps, but placement matters.</li><li>Logs grow forever. At one row every 30 s that is about 2,900 rows a day; Firebase's free tier will hold it for a while, but old rows should be deleted or archived.</li><li>The DHT11 is only accurate to about ±2 °C and ±5 % humidity.</li><li>Everything depends on Wi-Fi and Firebase being reachable; with no connection the bulb keeps its last state.</li><li>One shared login for the dashboard and the device; the rules don't separate what each may write.</li></ul><h3>Future improvements</h3><ul><li>Per-path rules: only the device account may write <code>/sensors</code> and <code>/logs</code>.</li><li>Keep a local auto mode running on the ESP32 when offline.</li><li>Replace the DHT11 with a BME280 for better accuracy.</li><li>A scheduled clean-up of logs older than a week.</li><li>Move the LDR away from the bulb, or switch the bulb from a time schedule plus the LDR.</li></ul></section><section id="s10"><h2><span class="num">10</span>Reflection</h2><p>The whole module came together here. The ESP32, the database and the dashboard each have one job, and they only agree on a handful of paths, which made it easy to add logging and an automatic mode without touching how the earlier parts worked. The most useful habit I picked up is writing the real state back instead of assuming a command worked, the same idea as the confirmed state in my LCU-1 panel.</p></section><section id="s11"><h2><span class="num">11</span>Repository Link</h2><p>All code for this task: <a href="https://github.com/TringyTrongy/protosem-iot/tree/main/task5-logging-automation">https://github.com/TringyTrongy/protosem-iot/tree/main/task5-logging-automation</a> (dashboard v2) and <a href="https://github.com/TringyTrongy/protosem-iot/tree/main/task4-firebase-dashboard/firmware">https://github.com/TringyTrongy/protosem-iot/tree/main/task4-firebase-dashboard/firmware</a> (ESP32 firmware with logging and auto mode)</p></section><section id="checklist"><h2><span class="num">✓</span>Checklist coverage</h2><p class="muted">Every item from the IoT Portfolio Guide for this task, and where it is on this page.</p><div class="tablewrap"><table class="check"><thead><tr><th>Guide item</th><th>Where</th></tr></thead><tbody><tr><td>Objective of the complete IoT system</td><td><a href="#s1">1. Overview</a></td></tr><tr><td>Final system architecture</td><td><a href="#s3">3. System Design</a></td></tr><tr><td>DHT11 temperature and humidity monitoring</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>LDR light-level monitoring</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Manual bulb control</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Automatic bulb control using the LDR</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Manual / automatic mode documented</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Logic for automatic lighting</td><td><a href="#s3">3. System Design</a></td></tr><tr><td>LDR threshold / calibration method</td><td><a href="#s5">5. Wiring / Setup</a></td></tr><tr><td>Historical data logging in Firebase</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Database structure for logs</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Timestamped sensor readings</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Temperature and humidity recorded</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>LDR values recorded</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Bulb status and mode recorded</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Historical data on the dashboard</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Graph / chart of recorded data</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>CSV download</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Downloaded file shown to contain the data</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Screenshots of Firebase log data</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Screenshots of the dashboard and chart</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Photographs of the complete prototype</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Video of the complete system</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Problems and solutions</td><td><a href="#s9">9. Challenges &amp; Fixes</a></td></tr><tr><td>Limitations of the prototype</td><td><a href="#s9">9. Challenges &amp; Fixes</a></td></tr><tr><td>Future improvements</td><td><a href="#s9">9. Challenges &amp; Fixes</a></td></tr><tr><td>Final learning reflection</td><td><a href="#s10">10. Reflection</a></td></tr><tr><td>All source code in the repository</td><td><a href="#s11">11. Repository Link</a></td></tr></tbody></table></div></section></div></div>
+</main>
+<footer class="wrap foot">ProtoSem 1.18 · Forge Innovation &amp; Ventures, KCT Tech Park · IoT module · <a href="https://github.com/TringyTrongy/protosem-iot">Source on GitHub</a></footer>
+</body>
+</html>

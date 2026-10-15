@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulb-V2 Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; }
+  input, button { font-size: 15px; padding: 8px 10px; margin: 4px 4px 4px 0; }
+  button { cursor: pointer; }
+  #dash p { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div id="authDiv">
+  <h3>Log in</h3>
+  <input id="email" type="email" placeholder="Email">
+  <input id="pass" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+</div>
+
+<div id="dash" style="display:none">
+  <h2>Bulb-V2 Dashboard <button onclick="auth.signOut()">Logout</button></h2>
+  <p>Temp: <span id="t">-</span>&deg;C &nbsp;|&nbsp; Humidity: <span id="h">-</span>% &nbsp;|&nbsp; LDR: <span id="l">-</span></p>
+  <p>Bulb: <span id="b">-</span> &nbsp;|&nbsp; Mode: <span id="m">-</span></p>
+  <button onclick="toggleMode()">Toggle Mode</button>
+  <button onclick="toggleBulb()">Toggle Bulb (manual only)</button>
+  <br><br>
+  <label>LDR Threshold: <input id="th" type="number" onchange="setTh(this.value)"></label>
+  <br><br>
+  <button onclick="exportCSV()">Download Logs CSV</button>
+</div>
+
+<script>
+  // Paste your config from Firebase Console > Project settings > General > Your apps
+  const firebaseConfig = {
+    apiKey: "AIzaSyBMG_YE_Hc0sXN34GXI2USB7i3XucQmfPw",
+    authDomain: "bulb-v2.firebaseapp.com",
+    databaseURL: "https://bulb-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "bulb-v2",
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  let cur = {};
+
+  function login() {
+    auth.signInWithEmailAndPassword(email.value, pass.value).catch(err => alert(err.message));
+  }
+
+  auth.onAuthStateChanged(user => {
+    authDiv.style.display = user ? 'none' : 'block';
+    dash.style.display = user ? 'block' : 'none';
+    if (user) {
+      db.ref('sensors/current').on('value', s => {
+        const v = s.val() || {};
+        t.innerText = v.temperature ?? '-';
+        h.innerText = v.humidity ?? '-';
+        l.innerText = v.ldr ?? '-';
+      });
+      db.ref('bulb').on('value', s => {
+        cur = s.val() || {};
+        b.innerText = cur.status ? "ON" : "OFF";
+        m.innerText = cur.mode || '-';
+      });
+      db.ref('settings/ldrThreshold').on('value', s => {
+        th.value = s.val() ?? 0;
+      });
+    }
+  });
+
+  function toggleMode() {
+    db.ref('bulb/mode').set(cur.mode === 'manual' ? 'auto' : 'manual');
+  }
+
+  function toggleBulb() {
+    if (cur.mode === 'manual') db.ref('bulb/status').set(!cur.status);
+  }
+
+  function setTh(v) {
+    db.ref('settings/ldrThreshold').set(Number(v));
+  }
+
+  function exportCSV() {
+    db.ref('logs').once('value', snap => {
+      let csv = "Timestamp,Temp,Humidity,LDR,Bulb,Mode\n";
+      snap.forEach(child => {
+        const v = child.val();
+        csv += `${new Date(v.timestamp).toLocaleString()},${v.temperature},${v.humidity},${v.ldr},${v.bulbState},${v.mode}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'logs.csv';
+      a.click();
+    });
+  }
+</script>
+
+</body>
+</html>

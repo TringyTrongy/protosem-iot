@@ -1,0 +1,5 @@
+# Real credentials never go in the repository
+secrets.h
+arduino_secrets.h
+.firebase/
+node_modules/

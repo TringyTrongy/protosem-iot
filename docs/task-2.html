@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task 2 — Adafruit IO Dashboard &amp; MQTT · ProtoSem IoT · Viswes</title>
+<meta name="description" content="Switching a mains bulb from anywhere through an Adafruit IO dashboard and MQTT.">
+<link rel="stylesheet" href="assets/style.css?v=3">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="index.html">ProtoSem IoT <span>· Viswes Vijayaragavan Sivakumar · 24BCS321</span></a>
+  <nav><a href="index.html">Overview</a><a href="task-1.html">Task 1</a><a href="task-2.html" class="on">Task 2</a><a href="task-3.html">Task 3</a><a href="task-4.html">Task 4</a><a href="task-5.html">Task 5</a><a href="https://github.com/TringyTrongy/protosem-iot">Repository</a></nav>
+</div></header>
+<main class="wrap">
+<div class="hero"><h1>Task 2 — Adafruit IO Dashboard &amp; MQTT</h1><p class="lede">Switching a mains bulb from anywhere through an Adafruit IO dashboard and MQTT.</p></div>
+<div class="links"><a class="btn" href="https://github.com/TringyTrongy/protosem-iot/tree/main/task2-adafruit-io-mqtt">Code for this task</a></div><div class="layout"><nav class="toc"><b>On this page</b><a href="#s1">1. Overview</a><a href="#s2">2. Concepts</a><a href="#s3">3. System Design</a><a href="#s4">4. Hardware &amp; Software</a><a href="#s5">5. Wiring / Setup</a><a href="#s6">6. Implementation</a><a href="#s7">7. Configuration</a><a href="#s8">8. Evidence</a><a href="#s9">9. Challenges &amp; Fixes</a><a href="#s10">10. Reflection</a><a href="#s11">11. Repository Link</a></nav><div class="content"><section id="s1"><h2><span class="num">1</span>Overview</h2><p><b>Objective.</b> Control a real bulb from anywhere in the world, not just from inside one Wi-Fi network.</p>
+<p><b>Problem it solves.</b> Task 1 only worked on the local network. Here the control goes through a cloud service: a toggle on an Adafruit IO dashboard publishes <code>ON</code> or <code>OFF</code> to a feed, and the ESP32, which is subscribed to that feed, switches a relay that powers the bulb.</p></section><section id="s2"><h2><span class="num">2</span>Concepts</h2><h3>Why Adafruit IO</h3>
+<p>Adafruit IO is a cloud service built for IoT data. It stores values in <b>feeds</b>, lets you build <b>dashboards</b> (toggles, gauges, charts) on top of them, and runs an MQTT broker the ESP32 can connect to. I didn't have to write or host a server.</p>
+<h3>MQTT in one paragraph</h3>
+<p>MQTT is a lightweight publish/subscribe protocol. Devices never talk to each other directly. A <b>publisher</b> sends a message to a <b>topic</b> on a <b>broker</b>, and the broker forwards it to every <b>subscriber</b> of that topic. Messages are tiny, and the device keeps one connection open instead of polling, which suits a microcontroller.</p>
+<div class="tablewrap"><table class=""><thead><tr><th>Role</th><th>In this project</th></tr></thead><tbody><tr><td>Publisher</td><td>The Toggle block on my Adafruit IO dashboard</td></tr><tr><td>Broker</td><td>Adafruit IO (io.adafruit.com)</td></tr><tr><td>Subscriber</td><td>The ESP32</td></tr><tr><td>Topic / feed</td><td><code>TringyTrongy/feeds/bulb-relay</code></td></tr></tbody></table></div>
+<h3>Topics and feeds</h3>
+<p>A feed is Adafruit IO's name for an MQTT topic. Its full topic is <code>username/feeds/feed-key</code>. Anything that writes to <code>bulb-relay</code> (the dashboard now, IFTTT in Task 3) controls the bulb, because the ESP32 only cares about the feed.</p></section><section id="s3"><h2><span class="num">3</span>System Design</h2><svg class="diagram" viewBox="0 0 875 155" role="img" aria-label="Task 2 data flow" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs><title>Task 2 data flow</title><rect x="10" y="40" width="160" height="70" rx="10" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/><text x="90.0" y="69.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Adafruit IO dashboard</text><text x="90.0" y="86.0" text-anchor="middle" font-size="11.5" fill="#6b7280">Toggle block</text><rect x="255" y="40" width="170" height="70" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/><text x="340.0" y="69.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Adafruit IO broker</text><text x="340.0" y="86.0" text-anchor="middle" font-size="11.5" fill="#6b7280">feed: bulb-relay</text><rect x="510" y="40" width="150" height="70" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/><text x="585.0" y="69.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">ESP32</text><text x="585.0" y="86.0" text-anchor="middle" font-size="11.5" fill="#6b7280">subscriber</text><rect x="745" y="40" width="120" height="70" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/><text x="805.0" y="69.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">Relay → bulb</text><text x="805.0" y="86.0" text-anchor="middle" font-size="11.5" fill="#6b7280">GPIO26</text><line x1="170" y1="75" x2="255" y2="75" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="212.5" y="68.0" text-anchor="middle" font-size="11" fill="#6b7280">publish ON / OFF</text><line x1="425" y1="75" x2="510" y2="75" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="467.5" y="68.0" text-anchor="middle" font-size="11" fill="#6b7280">MQTT message</text><line x1="660" y1="75" x2="745" y2="75" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/><text x="702.5" y="68.0" text-anchor="middle" font-size="11" fill="#6b7280">setRelay()</text><text x="340" y="140" text-anchor="middle" font-size="11" fill="#6b7280">topic: TringyTrongy/feeds/bulb-relay</text></svg><p class="muted">On boot the ESP32 also asks the feed for its last value (<code>bulbRelay-&gt;get()</code>), so after a reset the bulb matches the dashboard.</p></section><section id="s4"><h2><span class="num">4</span>Hardware &amp; Software</h2><div class="tablewrap"><table class=""><thead><tr><th>Hardware</th><th>Software / services</th></tr></thead><tbody><tr><td>ESP32 DevKit V1</td><td>Arduino IDE / Arduino Cloud editor</td></tr><tr><td>1-channel 5 V relay module (active LOW)</td><td><i>Adafruit IO Arduino</i> library (uses Adafruit MQTT)</td></tr><tr><td>Bulb, holder and mains cable</td><td>Adafruit IO account <code>TringyTrongy</code>: feed <code>bulb-relay</code>, dashboard <code>bulb-relay</code></td></tr><tr><td>USB cable, jumper wires</td><td></td></tr></tbody></table></div></section><section id="s5"><h2><span class="num">5</span>Wiring / Setup</h2><svg class="diagram" viewBox="0 0 760 142" role="img" aria-label="Task 2 wiring" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs><title>Task 2 wiring</title><rect x="20" y="20" width="150" height="102" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/><text x="95.0" y="65.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2937">ESP32</text><text x="95.0" y="82.0" text-anchor="middle" font-size="11.5" fill="#6b7280">DevKit V1</text><text x="180" y="45" font-size="12" fill="#1f2937" font-family="ui-monospace,monospace">GPIO26</text><line x1="320" y1="40" x2="480" y2="40" stroke="#64748b" stroke-width="2"/><circle cx="320" cy="40" r="3.5" fill="#64748b"/><circle cx="480" cy="40" r="3.5" fill="#64748b"/><text x="492" y="45" font-size="12" fill="#1f2937"><tspan font-weight="600">Relay IN</tspan> <tspan fill="#6b7280">signal</tspan></text><text x="180" y="79" font-size="12" fill="#1f2937" font-family="ui-monospace,monospace">VIN</text><line x1="320" y1="74" x2="480" y2="74" stroke="#64748b" stroke-width="2"/><circle cx="320" cy="74" r="3.5" fill="#64748b"/><circle cx="480" cy="74" r="3.5" fill="#64748b"/><text x="492" y="79" font-size="12" fill="#1f2937"><tspan font-weight="600">Relay VCC</tspan> <tspan fill="#6b7280">5 V</tspan></text><text x="180" y="113" font-size="12" fill="#1f2937" font-family="ui-monospace,monospace">GND</text><line x1="320" y1="108" x2="480" y2="108" stroke="#64748b" stroke-width="2"/><circle cx="320" cy="108" r="3.5" fill="#64748b"/><circle cx="480" cy="108" r="3.5" fill="#64748b"/><text x="492" y="113" font-size="12" fill="#1f2937"><tspan font-weight="600">Relay GND</tspan> <tspan fill="#6b7280"></tspan></text></svg><div class="tablewrap"><table class=""><thead><tr><th>ESP32 pin</th><th>Relay module</th></tr></thead><tbody><tr><td>GPIO26</td><td>IN</td></tr><tr><td>VIN (5 V from USB)</td><td>VCC</td></tr><tr><td>GND</td><td>GND</td></tr></tbody></table></div><p>The bulb's <b>live</b> wire is cut and passed through the relay's <b>COM</b> and <b>NO</b> (normally open) terminals; neutral goes straight to the bulb. With the relay off, the circuit is open and the bulb is off.</p><div class="callout warn"><b>Mains voltage.</b> The relay side carries 230 V AC. Keep the mains side fully insulated, check it before plugging in, and never touch the relay terminals while it is powered.</div></section><section id="s6"><h2><span class="num">6</span>Implementation</h2><details class="codefile" open><summary><span class="fname">bulb_v2_adafruitio_relay.ino</span><a href="https://github.com/TringyTrongy/protosem-iot/blob/main/task2-adafruit-io-mqtt/bulb_v2_adafruitio_relay/bulb_v2_adafruitio_relay.ino">view on GitHub</a></summary><p class="muted">Credentials come from <code>arduino_secrets.h</code>, which is not in the repository. Copy <code>arduino_secrets.example.h</code> and fill it in.</p><pre><code class="cpp">/*
+  Bulb-V2 — Adafruit IO Relay Control
+  ESP32 + single-channel relay module
+  Toggles the bulb ON/OFF via an Adafruit IO feed + dashboard toggle switch
+*/
+
+#include &lt;WiFi.h&gt;
+#include &quot;AdafruitIO_WiFi.h&quot;
+#include &quot;arduino_secrets.h&quot;   // auto-generated by the Web Editor&#x27;s Secret tab
+
+// ---------- Wi-Fi credentials (set these in the Secret tab: SSID, PASS) ----------
+#define WIFI_SSID      SECRET_SSID
+#define WIFI_PASS      SECRET_PASS
+
+// ---------- Adafruit IO credentials (Secret tab: AIO_USERNAME, AIO_KEY) ----------
+#define IO_USERNAME    SECRET_AIO_USERNAME
+#define IO_KEY         SECRET_AIO_KEY
+
+// ---------- Relay wiring ----------
+#define RELAY_PIN         26     // GPIO wired to the relay&#x27;s IN/signal pin
+#define RELAY_ACTIVE_LOW  true   // most cheap 1-channel relay boards trigger on LOW
+                                  // if the bulb turns on when you press &quot;OFF&quot;, flip this
+
+AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS);
+AdafruitIO_Feed *bulbRelay = io.feed(&quot;bulb-relay&quot;);
+
+void setRelay(bool on) {
+  bool pinHigh = RELAY_ACTIVE_LOW ? !on : on;
+  digitalWrite(RELAY_PIN, pinHigh ? HIGH : LOW);
+  Serial.print(&quot;Relay set to: &quot;);
+  Serial.println(on ? &quot;ON&quot; : &quot;OFF&quot;);
+}
+
+// called whenever the dashboard toggle publishes a new value
+void handleMessage(AdafruitIO_Data *data) {
+  String val = data-&gt;value();
+  Serial.print(&quot;Feed message received: &quot;);
+  Serial.println(val);
+
+  bool on = (val == &quot;1&quot; || val.equalsIgnoreCase(&quot;ON&quot;));
+  setRelay(on);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(RELAY_PIN, OUTPUT);
+  setRelay(false); // start with bulb OFF
+
+  Serial.print(&quot;Connecting to Adafruit IO&quot;);
+  io.connect();
+
+  // subscribe to the feed
+  bulbRelay-&gt;onMessage(handleMessage);
+
+  while (io.status() &lt; AIO_CONNECTED) {
+    Serial.print(&quot;.&quot;);
+    delay(500);
+  }
+  Serial.println();
+  Serial.println(io.statusText());
+
+  // pull the last known state from the dashboard on boot
+  bulbRelay-&gt;get();
+}
+
+void loop() {
+  io.run(); // keeps the MQTT connection alive — must be called every loop, unblocked
+}
+</code></pre></details>
+<h3>Key sections</h3>
+<ul>
+<li><b>Connecting</b> — <code>AdafruitIO_WiFi io(...)</code> holds the Wi-Fi and Adafruit IO credentials; <code>io.connect()</code> joins Wi-Fi and opens the MQTT connection.</li>
+<li><b>Subscribing</b> — <code>io.feed("bulb-relay")</code> picks the topic and <code>bulbRelay-&gt;onMessage(handleMessage)</code> registers the function that runs for every new value.</li>
+<li><b>Acting on a message</b> — <code>handleMessage()</code> accepts <code>"1"</code> or <code>"ON"</code> as on and anything else as off, then calls <code>setRelay()</code>.</li>
+<li><b>Active-LOW relay</b> — <code>RELAY_ACTIVE_LOW</code> inverts the pin, because this relay board closes its contact when IN is pulled LOW.</li>
+<li><b>Keeping the connection alive</b> — <code>io.run()</code> must run on every loop; it processes incoming messages and sends MQTT keep-alive pings.</li>
+</ul></section><section id="s7"><h2><span class="num">7</span>Configuration</h2><ol><li>Signed up at io.adafruit.com (username <code>TringyTrongy</code>).</li><li>Feeds → New Feed → <code>bulb-relay</code>.</li><li>Dashboards → New Dashboard → <code>bulb-relay</code> → New Block → <i>Toggle</i>, linked to the <code>bulb-relay</code> feed (button values ON / OFF).</li><li>Copied the username and Active Key from the key icon into the sketch's secrets.</li><li>Flashed the ESP32 and opened the Serial Monitor to watch messages arrive.</li></ol><div class="gallery"><figure class="shot"><img src="assets/img/adafruit-feeds.png" alt="The bulb-relay feed (last value OFF)"><figcaption>The bulb-relay feed (last value OFF)</figcaption></figure><figure class="shot"><img src="assets/img/adafruit-dashboard.png" alt="The bulb-relay dashboard with its Toggle block"><figcaption>The bulb-relay dashboard with its Toggle block</figcaption></figure></div><figure class="shot"><img src="assets/img/adafruit-feed-bulb-relay.png" alt="Feed page: privacy, history settings and the dashboard it appears on"><figcaption>Feed page: privacy, history settings and the dashboard it appears on</figcaption></figure></section><section id="s8"><h2><span class="num">8</span>Evidence</h2><div class="gallery"><figure class="shot ev" data-what="Photo of the hardware"><img src="evidence/task2-setup.jpg" alt="ESP32, relay module and bulb" onerror="this.closest('figure').classList.add('pending')"><figcaption>ESP32, relay module and bulb</figcaption></figure><figure class="shot ev" data-what="Serial Monitor screenshot"><img src="evidence/task2-serial.png" alt="Serial Monitor: &quot;Feed message received: ON&quot; and &quot;Relay set to: ON&quot;" onerror="this.closest('figure').classList.add('pending')"><figcaption>Serial Monitor: "Feed message received: ON" and "Relay set to: ON"</figcaption></figure><figure class="shot ev" data-what="Screenshot of the feed with values"><img src="evidence/task2-feed-data.png" alt="Feed history after toggling a few times" onerror="this.closest('figure').classList.add('pending')"><figcaption>Feed history after toggling a few times</figcaption></figure></div><figure class="shot ev" data-what="Demo video"><video controls preload="metadata" src="evidence/task2-demo.mp4" onerror="this.closest('figure').classList.add('pending')"></video><figcaption>Demo: the dashboard toggle switching the bulb through the cloud</figcaption></figure></section><section id="s9"><h2><span class="num">9</span>Challenges &amp; Fixes</h2><div class="fix"><p><b>Problem.</b> The bulb turned on when the dashboard said OFF.</p><p><b>Why.</b> Most cheap relay boards are active LOW: the contact closes when IN is pulled to ground, so the pin value is the opposite of the bulb.</p><p><b>Fix.</b> Added <code>RELAY_ACTIVE_LOW</code>; <code>setRelay()</code> inverts the pin when it is true. Only one line changes if a different board is used.</p></div><div class="fix"><p><b>Problem.</b> The relay did not always release fully when switched off.</p><p><b>Why.</b> The relay module expects 5 V logic but the ESP32 drives 3.3 V. Driving the pin HIGH to switch off can still leak enough current through the module's input to keep it half-on.</p><p><b>Fix.</b> In my later LCU-1 firmware (and the Task 4 firmware) the pin is set to <code>INPUT</code> (high impedance) for OFF instead of HIGH, which leaves the input floating at the module's own pull-up.</p></div><div class="fix"><p><b>Problem.</b> After a reset the bulb did not match the dashboard.</p><p><b>Why.</b> The ESP32 only hears new messages, so it missed the value set while it was off.</p><p><b>Fix.</b> <code>bulbRelay-&gt;get()</code> at the end of <code>setup()</code> asks the broker for the last value, which runs <code>handleMessage()</code> once.</p></div></section><section id="s10"><h2><span class="num">10</span>Reflection</h2><p>MQTT changed how I think about devices. The ESP32 doesn't know or care who is controlling it; it just listens to a topic. That makes adding a second controller almost free, which is exactly what Task 3 does with a voice assistant. I also learned to check what voltage a module expects before trusting a GPIO pin to drive it.</p></section><section id="s11"><h2><span class="num">11</span>Repository Link</h2><p>All code for this task: <a href="https://github.com/TringyTrongy/protosem-iot/tree/main/task2-adafruit-io-mqtt">https://github.com/TringyTrongy/protosem-iot/tree/main/task2-adafruit-io-mqtt</a></p></section><section id="checklist"><h2><span class="num">✓</span>Checklist coverage</h2><p class="muted">Every item from the IoT Portfolio Guide for this task, and where it is on this page.</p><div class="tablewrap"><table class="check"><thead><tr><th>Guide item</th><th>Where</th></tr></thead><tbody><tr><td>Purpose of Adafruit IO in an IoT system</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Basic concept of MQTT</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Publisher, subscriber and broker identified</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Role of an MQTT topic / feed</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Hardware and software used</td><td><a href="#s4">4. Hardware &amp; Software</a></td></tr><tr><td>Adafruit IO account created and documented</td><td><a href="#s7">7. Configuration</a></td></tr><tr><td>Dashboard and feed configuration documented</td><td><a href="#s7">7. Configuration</a></td></tr><tr><td>Communication flow between ESP32, MQTT and Adafruit IO</td><td><a href="#s3">3. System Design</a></td></tr><tr><td>MQTT topic / feed structure used</td><td><a href="#s2">2. Concepts</a></td></tr><tr><td>Complete ESP32 source code</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Explanation of important code sections</td><td><a href="#s6">6. Implementation</a></td></tr><tr><td>Photographs of the hardware setup</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Screenshots of the Adafruit IO dashboard</td><td><a href="#s7">7. Configuration</a></td></tr><tr><td>LED / bulb control through the cloud dashboard demonstrated</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Working demonstration video</td><td><a href="#s8">8. Evidence</a></td></tr><tr><td>Problems during MQTT / cloud setup</td><td><a href="#s9">9. Challenges &amp; Fixes</a></td></tr><tr><td>Solutions implemented</td><td><a href="#s9">9. Challenges &amp; Fixes</a></td></tr><tr><td>Learning reflection</td><td><a href="#s10">10. Reflection</a></td></tr><tr><td>All files in the repository</td><td><a href="#s11">11. Repository Link</a></td></tr></tbody></table></div></section></div></div>
+</main>
+<footer class="wrap foot">ProtoSem 1.18 · Forge Innovation &amp; Ventures, KCT Tech Park · IoT module · <a href="https://github.com/TringyTrongy/protosem-iot">Source on GitHub</a></footer>
+</body>
+</html>

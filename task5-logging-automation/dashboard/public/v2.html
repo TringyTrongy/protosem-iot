@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulb-V2 Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262b35; --fg:#e8eaf0; --dim:#9aa3b2; --on:#f5b301; --ok:#22c55e; --bad:#ef4444; --accent:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:980px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--dim); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--bad); }
+  .dot.live { background:var(--ok); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .label { color:var(--dim); font-size:13px; }
+  .big { font-size:30px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .unit { font-size:15px; color:var(--dim); font-weight:400; }
+  button, input { font:inherit; }
+  button { background:#232835; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 14px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#0b1220; font-weight:600; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input { background:#0c0e12; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .bulb { font-size:30px; font-weight:600; margin-top:4px; }
+  .bulb.on { color:var(--on); }
+  .section { margin-top:22px; }
+  .section h2 { font-size:16px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; }
+  .tablewrap { overflow-x:auto; }
+  #authDiv { max-width:360px; margin:12vh auto 0; }
+  #authDiv input { width:100%; margin-top:8px; }
+  #authDiv button { width:100%; margin-top:12px; }
+  .err { color:var(--bad); font-size:13px; min-height:18px; margin-top:8px; }
+  .muted { color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+
+<div id="authDiv" class="wrap">
+  <div class="card">
+    <h1>Bulb-V2</h1>
+    <p class="muted">Sign in to monitor and control the bulb.</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="username">
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="primary" onclick="login()">Log in</button>
+    <div id="authErr" class="err"></div>
+  </div>
+</div>
+
+<div id="dash" class="wrap" style="display:none">
+  <header>
+    <div>
+      <h1>Bulb-V2 Dashboard</h1>
+      <span class="pill"><span id="liveDot" class="dot"></span><span id="liveText">Waiting for the ESP32…</span></span>
+    </div>
+    <button onclick="auth.signOut()">Log out</button>
+  </header>
+
+  <div class="grid">
+    <div class="card"><div class="label">Temperature</div><div class="big"><span id="t">–</span> <span class="unit">°C</span></div></div>
+    <div class="card"><div class="label">Humidity</div><div class="big"><span id="h">–</span> <span class="unit">%</span></div></div>
+    <div class="card"><div class="label">Light level (LDR, 0–4095)</div><div class="big"><span id="l">–</span></div></div>
+    <div class="card">
+      <div class="label">Bulb</div>
+      <div id="b" class="bulb">–</div>
+      <div class="muted">Mode: <b id="m">–</b></div>
+    </div>
+  </div>
+
+  <div class="grid section">
+    <div class="card">
+      <div class="label">Control</div>
+      <div class="row">
+        <button onclick="toggleMode()">Switch to <span id="otherMode">auto</span></button>
+        <button id="bulbBtn" onclick="toggleBulb()">Toggle bulb</button>
+      </div>
+      <p class="muted" id="modeHint">In manual mode the button switches the bulb. In auto mode the ESP32 decides from the LDR.</p>
+    </div>
+    <div class="card">
+      <div class="label">Auto mode threshold</div>
+      <div class="row">
+        <input id="th" type="number" min="0" max="4095" style="width:120px">
+        <button onclick="setTh(th.value)">Save</button>
+      </div>
+      <p class="muted">Bulb turns on when the LDR reading drops below this (with ±100 hysteresis).</p>
+    </div>
+  </div>
+
+  <div class="section card">
+    <h2>History <span class="muted">(last 50 log entries)</span></h2>
+    <canvas id="histChart" height="110"></canvas>
+  </div>
+
+  <div class="section card">
+    <div class="row" style="justify-content:space-between;margin-top:0">
+      <h2 style="margin:0">Recent log entries</h2>
+      <button onclick="exportCSV()">Download all logs (CSV)</button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Time</th><th>Temp (°C)</th><th>Humidity (%)</th><th>LDR</th><th>Bulb</th><th>Mode</th></tr></thead>
+        <tbody id="histBody"><tr><td colspan="6" class="muted">No log entries yet. They appear every 30 s while the ESP32 is running.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Web config from Firebase console > Project settings (this key is meant to be public;
+  // the database rules are what protect the data).
+  const firebaseConfig = {
+    apiKey: "AIzaSyBMG_YE_Hc0sXN34GXI2USB7i3XucQmfPw",
+    authDomain: "bulb-v2.firebaseapp.com",
+    databaseURL: "https://bulb-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "bulb-v2",
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  let cur = {};
+  let lastUpdate = 0;
+
+  function login() {
+    authErr.textContent = '';
+    auth.signInWithEmailAndPassword(email.value.trim(), pass.value)
+      .catch(err => authErr.textContent = err.message);
+  }
+  pass.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+  auth.onAuthStateChanged(user => {
+    authDiv.style.display = user ? 'none' : 'block';
+    dash.style.display = user ? 'block' : 'none';
+    if (!user) return;
+
+    db.ref('sensors/current').on('value', s => {
+      const v = s.val() || {};
+      t.textContent = v.temperature != null ? Number(v.temperature).toFixed(1) : '–';
+      h.textContent = v.humidity != null ? Math.round(v.humidity) : '–';
+      l.textContent = v.ldr ?? '–';
+      lastUpdate = v.updatedAt || 0;
+      updateLive();
+    });
+    db.ref('bulb').on('value', s => {
+      cur = s.val() || {};
+      b.textContent = cur.status ? 'ON' : 'OFF';
+      b.className = 'bulb' + (cur.status ? ' on' : '');
+      m.textContent = cur.mode || '–';
+      otherMode.textContent = cur.mode === 'auto' ? 'manual' : 'auto';
+      bulbBtn.disabled = cur.mode === 'auto';
+    });
+    db.ref('settings/ldrThreshold').on('value', s => {
+      if (document.activeElement !== th) th.value = s.val() ?? '';
+    });
+    db.ref('logs').orderByChild('timestamp').limitToLast(50).on('value', s => {
+      const rows = [];
+      s.forEach(c => { rows.push(c.val()); });
+      drawHistory(rows);
+    });
+  });
+
+  // "Live" means the ESP32 wrote sensor data in the last 20 seconds.
+  function updateLive() {
+    const age = Date.now() - lastUpdate;
+    const live = lastUpdate && age < 20000;
+    liveDot.className = 'dot' + (live ? ' live' : '');
+    liveText.textContent = !lastUpdate ? 'Waiting for the ESP32…'
+      : live ? 'ESP32 online · updated ' + Math.round(age / 1000) + ' s ago'
+      : 'ESP32 offline · last update ' + new Date(lastUpdate).toLocaleString();
+  }
+  setInterval(updateLive, 1000);
+
+  function toggleMode() {
+    db.ref('bulb/mode').set(cur.mode === 'auto' ? 'manual' : 'auto');
+  }
+  function toggleBulb() {
+    if (cur.mode !== 'auto') db.ref('bulb/status').set(!cur.status);
+  }
+  function setTh(v) {
+    const n = Number(v);
+    if (Number.isFinite(n)) db.ref('settings/ldrThreshold').set(Math.max(0, Math.min(4095, Math.round(n))));
+  }
+
+  let histChart = null;
+  function drawHistory(rows) {
+    const labels = rows.map(r => new Date(r.timestamp).toLocaleTimeString());
+    const data = {
+      labels,
+      datasets: [
+        { label: 'Temp (°C)', data: rows.map(r => r.temperature), yAxisID: 'y', tension: .3, borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 2 },
+        { label: 'Humidity (%)', data: rows.map(r => r.humidity), yAxisID: 'y', tension: .3, borderColor: '#60a5fa', backgroundColor: '#60a5fa', pointRadius: 2 },
+        { label: 'LDR', data: rows.map(r => r.ldr), yAxisID: 'y1', tension: .3, borderColor: '#f5b301', backgroundColor: '#f5b301', pointRadius: 2 }
+      ]
+    };
+    const grid = { color: '#262b35' }, ticks = { color: '#9aa3b2' };
+    if (histChart) { histChart.data = data; histChart.update(); }
+    else {
+      histChart = new Chart(histCanvas(), {
+        type: 'line', data,
+        options: {
+          animation: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { labels: { color: '#e8eaf0' } } },
+          scales: {
+            x: { grid, ticks },
+            y: { position: 'left', grid, ticks, title: { display: true, text: '°C / %', color: '#9aa3b2' } },
+            y1: { position: 'right', grid: { drawOnChartArea: false }, ticks, title: { display: true, text: 'LDR', color: '#9aa3b2' } }
+          }
+        }
+      });
+    }
+    if (!rows.length) return;
+    histBody.innerHTML = rows.slice().reverse().slice(0, 20).map(r =>
+      `<tr><td>${new Date(r.timestamp).toLocaleString()}</td><td>${fmt(r.temperature, 1)}</td><td>${fmt(r.humidity, 0)}</td><td>${r.ldr ?? ''}</td><td>${r.bulbState ?? ''}</td><td>${r.mode ?? ''}</td></tr>`
+    ).join('');
+  }
+  function histCanvas() { return document.getElementById('histChart'); }
+  function fmt(v, d) { return v == null ? '' : Number(v).toFixed(d); }
+
+  function exportCSV() {
+    db.ref('logs').orderByChild('timestamp').once('value', snap => {
+      let csv = 'Timestamp,Temp,Humidity,LDR,Bulb,Mode\n';
+      snap.forEach(child => {
+        const v = child.val();
+        csv += `${new Date(v.timestamp).toISOString()},${v.temperature ?? ''},${v.humidity ?? ''},${v.ldr ?? ''},${v.bulbState ?? ''},${v.mode ?? ''}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'bulb-v2-logs.csv';
+      a.click();
+    });
+  }
+</script>
+
+</body>
+</html>
