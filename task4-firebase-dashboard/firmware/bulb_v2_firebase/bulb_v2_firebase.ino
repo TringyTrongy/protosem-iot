@@ -1,7 +1,7 @@
 /*
   Bulb-V2 — Firebase firmware (IoT Tasks 4 and 5)
   ESP32 DevKit V1 + DHT11 + LDR + 1-channel relay switching a bulb
-  Pins match the rig built with Sachin S: DHT11 GPIO4, LDR GPIO34, relay GPIO5.
+  Pins match our rig: DHT11 GPIO4, LDR GPIO34, relay GPIO5.
 
   What it does
     - Reads the DHT11 (temperature, humidity) and the LDR every 5 s and writes them to
