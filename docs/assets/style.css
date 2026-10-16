@@ -66,3 +66,6 @@ main h2{font-size:22px}
 p,li,td,figcaption{overflow-wrap:break-word}
 :not(pre)>code{overflow-wrap:anywhere}
 section{scroll-margin-top:70px}
+figure.pending{display:none}
+.credit{display:block;font-size:12px;color:#94a3b8;margin-top:2px}
+.credit a{color:#64748b}

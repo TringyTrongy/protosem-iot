@@ -1,6 +1,6 @@
 # Task 4 — Firebase IoT Monitoring Dashboard
 
-- `firmware/bulb_v2_firebase/` — ESP32 + DHT11 (GPIO4) + LDR (GPIO34) + relay (GPIO26). Signs in to Firebase with Email/Password, writes `/sensors/current`, follows `/bulb`, and (Task 5) logs to `/logs` and runs auto mode.
+- `firmware/bulb_v2_firebase/` — ESP32 + DHT11 (GPIO4) + LDR (GPIO34) + relay (GPIO5, active HIGH; set `RELAY_ACTIVE_LOW` for other boards). Signs in to Firebase with Email/Password, writes `/sensors/current`, follows `/bulb`, and (Task 5) logs to `/logs` and runs auto mode.
   - Libraries: *Firebase Arduino Client Library for ESP8266 and ESP32* (Mobizt), *DHT sensor library* (Adafruit) + *Adafruit Unified Sensor*.
   - Copy `secrets.example.h` to `secrets.h` and fill it in.
 - `dashboard/` — Firebase Hosting project for `bulb-v2`. `public/index.html` is the dashboard as deployed at https://bulb-v2.web.app/.

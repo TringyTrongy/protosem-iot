@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IoT Portfolio · ProtoSem IoT · Viswes</title>
 <meta name="description" content="ESP32 · Adafruit IO · MQTT · IFTTT · Firebase — five tasks, one rig.">
-<link rel="stylesheet" href="assets/style.css?v=3">
+<link rel="stylesheet" href="assets/style.css?v=4">
 </head>
 <body>
 <header class="top"><div class="wrap">
@@ -17,7 +17,7 @@
 <p>These five pages document the IoT assignments from my ProtoSem 1.18 semester at Forge. They build on each other: one ESP32 starts by switching an LED from a browser and ends up as a logged, automated, cloud-connected light with a voice assistant and a web dashboard.</p>
 <div class="cards"><a class="card" href="task-1.html"><span class="k">Task 1</span><b>ESP32 Web Server &amp; HTML LED Control</b><span>ESP32 web server on the local network; an LED switched from a phone browser.</span></a><a class="card" href="task-2.html"><span class="k">Task 2</span><b>Adafruit IO Dashboard &amp; MQTT</b><span>A mains bulb on a relay, switched from an Adafruit IO dashboard over MQTT.</span></a><a class="card" href="task-3.html"><span class="k">Task 3</span><b>IFTTT + Adafruit IO Voice Automation</b><span>Google Assistant voice commands through IFTTT to the same Adafruit IO feed.</span></a><a class="card" href="task-4.html"><span class="k">Task 4</span><b>Firebase IoT Monitoring Dashboard</b><span>DHT11 + LDR readings and bulb control on a Firebase dashboard with login.</span></a><a class="card" href="task-5.html"><span class="k">Task 5</span><b>Firebase Logging, Automation &amp; Data Export</b><span>Timestamped logging, automatic lighting from the LDR, a history chart and CSV export.</span></a></div>
 <h2>The rig</h2>
-<div class="tablewrap"><table class=""><thead><tr><th>Part</th><th>Pin</th><th>Used in</th></tr></thead><tbody><tr><td>ESP32 DevKit V1</td><td>—</td><td>All tasks</td></tr><tr><td>LED + 220 Ω</td><td>GPIO2</td><td>Task 1</td></tr><tr><td>Relay module (active LOW) + bulb</td><td>GPIO26</td><td>Tasks 2–5</td></tr><tr><td>DHT11</td><td>GPIO4</td><td>Tasks 4–5</td></tr><tr><td>LDR + 10 kΩ divider</td><td>GPIO34</td><td>Tasks 4–5</td></tr></tbody></table></div>
+<div class="tablewrap"><table class=""><thead><tr><th>Part</th><th>Pin</th><th>Used in</th></tr></thead><tbody><tr><td>ESP32 DevKit V1</td><td>—</td><td>All tasks</td></tr><tr><td>LED + 220 Ω</td><td>GPIO2</td><td>Task 1</td></tr><tr><td>Relay module + bulb</td><td>GPIO26 (my Task 2–3 sketch) / GPIO5 (Firebase firmware)</td><td>Tasks 2–5</td></tr><tr><td>DHT11</td><td>GPIO4</td><td>Tasks 4–5</td></tr><tr><td>LDR + 10 kΩ divider</td><td>GPIO34</td><td>Tasks 4–5</td></tr></tbody></table></div>
 <h2>Links</h2>
 <ul><li>Source code for every task: <a href="https://github.com/TringyTrongy/protosem-iot">https://github.com/TringyTrongy/protosem-iot</a></li>
 <li>Firebase dashboard: <a href="https://bulb-v2.web.app/">https://bulb-v2.web.app/</a> · with history: <a href="https://bulb-v2.web.app/v2.html">https://bulb-v2.web.app/v2.html</a></li>

@@ -1,6 +1,7 @@
 /*
   Bulb-V2 — Firebase firmware (IoT Tasks 4 and 5)
   ESP32 DevKit V1 + DHT11 + LDR + 1-channel relay switching a bulb
+  Pins match the rig built with Sachin S: DHT11 GPIO4, LDR GPIO34, relay GPIO5.
 
   What it does
     - Reads the DHT11 (temperature, humidity) and the LDR every 5 s and writes them to
@@ -38,7 +39,8 @@
 #define DHT_PIN    4      // DHT11 data pin
 #define DHT_TYPE   DHT11
 #define LDR_PIN    34     // LDR voltage divider output (ADC1 pin, works while Wi-Fi is on)
-#define RELAY_PIN  26     // relay module IN pin (active LOW)
+#define RELAY_PIN  5      // relay module IN pin
+#define RELAY_ACTIVE_LOW false  // this rig's relay switches ON with HIGH; set true for an active-LOW board
 
 // ---------- Timing ----------
 const unsigned long SENSOR_INTERVAL_MS  = 5000;   // how often /sensors/current is updated
@@ -70,16 +72,22 @@ unsigned long lastControlMs = 0;
 unsigned long lastLogMs     = 0;
 
 // ---------- Relay ----------
-// ON  = drive the pin LOW (the relay module is active LOW).
-// OFF = release the pin (INPUT, high impedance). Driving a 5 V relay module's input HIGH from a
-//       3.3 V ESP32 pin can leak enough current to keep it half-on; releasing the pin avoids that.
+// Active-HIGH board (this rig): drive the pin HIGH for ON, LOW for OFF.
+// Active-LOW board: drive LOW for ON, and release the pin (INPUT, high impedance) for OFF.
+//   Driving a 5 V relay module's input HIGH from a 3.3 V ESP32 pin can leak enough current to
+//   keep it half-on; releasing the pin avoids that (the fix from my LCU-1 firmware).
 void setRelay(bool on) {
   bulbOn = on;
-  if (on) {
-    pinMode(RELAY_PIN, OUTPUT);
-    digitalWrite(RELAY_PIN, LOW);
+  if (RELAY_ACTIVE_LOW) {
+    if (on) {
+      pinMode(RELAY_PIN, OUTPUT);
+      digitalWrite(RELAY_PIN, LOW);
+    } else {
+      pinMode(RELAY_PIN, INPUT);
+    }
   } else {
-    pinMode(RELAY_PIN, INPUT);
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, on ? HIGH : LOW);
   }
   Serial.printf("Relay -> %s\n", on ? "ON" : "OFF");
 }

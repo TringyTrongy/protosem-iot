@@ -20,9 +20,14 @@ Live Firebase dashboard: https://bulb-v2.web.app/ (with history and CSV export: 
 | Part | ESP32 pin |
 |---|---|
 | LED + 220 Ω (Task 1) | GPIO2 |
-| Relay module IN, active LOW (Tasks 2–5) | GPIO26 |
+| Relay module IN — my Task 2–3 sketch | GPIO26 |
+| Relay module IN — Firebase firmware, Tasks 4–5 (active HIGH on the shared rig) | GPIO5 |
 | DHT11 data (Tasks 4–5) | GPIO4 |
 | LDR divider midpoint, 3V3 → LDR → pin → 10 kΩ → GND (Tasks 4–5) | GPIO34 |
+
+## Photos and videos
+
+The hardware photos and demo videos in `docs/evidence/sachin/` are from [Sachin S's portfolio](https://sachinsivapragash.github.io/sachin-portfolio/protosem-week-7). We built and tested the rig together.
 
 ## Credentials
 
